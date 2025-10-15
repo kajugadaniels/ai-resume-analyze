@@ -27,11 +27,11 @@ main {
   @apply min-h-screen pt-10;
 }
 h1 {
-  @apply text-6xl  text-gradient leading-tight tracking-[-2px] font-semibold;
+  @apply text-4xl  text-gradient leading-tight tracking-[-2px] font-semibold;
 }
 
 h2 {
-  @apply text-3xl text-dark-200;
+  @apply text-lg text-dark-200;
 }
 
 label {
@@ -72,7 +72,7 @@ form {
     @apply flex flex-row items-center gap-2 border border-gray-200 rounded-lg p-2 shadow-sm;
   }
   .auth-button {
-    @apply primary-gradient rounded-full py-4 px-8 cursor-pointer w-[600px] max-md:w-full text-3xl font-semibold text-white;
+    @apply primary-gradient rounded-full py-4 px-8 cursor-pointer w-[600px] max-md:w-full text-base font-semibold text-white;
   }
   .main-section {
     @apply flex flex-col items-center gap-8 pt-12 mx-15 pb-5;
