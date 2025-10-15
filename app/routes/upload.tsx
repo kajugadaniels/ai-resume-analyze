@@ -18,65 +18,76 @@ const Upload = () => {
         setFile(file)
     }
 
-    const handleAnalyze = async ({ companyName, jobTitle, jobDescription, file }: { companyName: string, jobTitle: string, jobDescription: string, file: File }) => {
+    const handleAnalyze = async ({
+        companyName, jobTitle, jobDescription, file
+    }: { companyName: string; jobTitle: string; jobDescription: string; file: File }) => {
         setIsProcessing(true);
+        try {
+            setStatusText('Uploading the file...');
+            const uploadedFile = await fs.upload([file]);
+            if (!uploadedFile) throw new Error('Failed to upload file');
 
-        setStatusText('Uploading the file...');
-        const uploadedFile = await fs.upload([file]);
-        if (!uploadedFile) return setStatusText('Error: Failed to upload file');
+            setStatusText('Converting to image...');
+            const imageFile = await convertPdfToImage(file);
+            if (!imageFile?.file) throw new Error('Failed to convert PDF to image');
 
-        setStatusText('Converting to image...');
-        const imageFile = await convertPdfToImage(file);
-        if (!imageFile.file) return setStatusText('Error: Failed to convert PDF to image');
+            setStatusText('Uploading the image...');
+            const uploadedImage = await fs.upload([imageFile.file]);
+            if (!uploadedImage) throw new Error('Failed to upload image');
 
-        setStatusText('Uploading the image...');
-        const uploadedImage = await fs.upload([imageFile.file]);
-        if (!uploadedImage) return setStatusText('Error: Failed to upload image');
+            setStatusText('Preparing data...');
+            const uuid = generateUUID();
+            const data: any = {
+                id: uuid,
+                resumePath: uploadedFile.path,
+                imagePath: uploadedImage.path,
+                companyName, jobTitle, jobDescription,
+                feedback: '',
+            };
+            await kv.set(`resume:${uuid}`, JSON.stringify(data));
 
-        setStatusText('Preparing data...');
-        const uuid = generateUUID();
-        const data = {
-            id: uuid,
-            resumePath: uploadedFile.path,
-            imagePath: uploadedImage.path,
-            companyName, jobTitle, jobDescription,
-            feedback: '',
+            setStatusText('Analyzing...');
+            const feedback = await ai.feedback(
+                uploadedFile.path,
+                prepareInstructions({ jobTitle, jobDescription })
+            );
+            if (!feedback) throw new Error('Failed to analyze resume');
+
+            const feedbackText = typeof feedback.message.content === 'string'
+                ? feedback.message.content
+                : feedback.message.content[0]?.text;
+
+            data.feedback = JSON.parse(feedbackText || '{}');
+            await kv.set(`resume:${uuid}`, JSON.stringify(data));
+
+            setStatusText('Analysis complete, redirecting...');
+            navigate(`/resume/${uuid}`);
+        } catch (err: any) {
+            console.error(err);
+            setStatusText(`Error: ${err?.message || 'Something went wrong'}`);
+        } finally {
+            // IMPORTANT: stop the spinner if we hit any error
+            setIsProcessing(false);
         }
-        await kv.set(`resume:${uuid}`, JSON.stringify(data));
-
-        setStatusText('Analyzing...');
-
-        const feedback = await ai.feedback(
-            uploadedFile.path,
-            prepareInstructions({ jobTitle, jobDescription })
-        )
-        if (!feedback) return setStatusText('Error: Failed to analyze resume');
-
-        const feedbackText = typeof feedback.message.content === 'string'
-            ? feedback.message.content
-            : feedback.message.content[0].text;
-
-        data.feedback = JSON.parse(feedbackText);
-        await kv.set(`resume:${uuid}`, JSON.stringify(data));
-        setStatusText('Analysis complete, redirecting...');
-        console.log(data);
-        navigate(`/resume/${uuid}`);
-    }
+    };
 
     const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
+        if (!file) {
+            setStatusText('Please select a PDF first.');
+            return;
+        }
         const form = e.currentTarget.closest('form');
         if (!form) return;
         const formData = new FormData(form);
+        handleAnalyze({
+            companyName: (formData.get('company-name') as string) || '',
+            jobTitle: (formData.get('job-title') as string) || '',
+            jobDescription: (formData.get('job-description') as string) || '',
+            file
+        });
+    };
 
-        const companyName = formData.get('company-name') as string;
-        const jobTitle = formData.get('job-title') as string;
-        const jobDescription = formData.get('job-description') as string;
-
-        if (!file) return;
-
-        handleAnalyze({ companyName, jobTitle, jobDescription, file });
-    }
 
     return (
         <main className="bg-[url('/images/bg-main.svg')] bg-cover">
